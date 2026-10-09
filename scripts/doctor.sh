@@ -2,8 +2,7 @@
 # Hestia · diagnóstico rápido del stack Docker.
 # Uso: ./scripts/doctor.sh
 set -uo pipefail
-cd "$(dirname "cd "$(dirname "$0")/.."
-")/.." || exit 1
+cd "$(dirname "$0")/.." || exit 1
 
 ok()   { printf '  \033[32m✔\033[0m %s\n' "$1"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$1"; }
