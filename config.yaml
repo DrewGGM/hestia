@@ -1,0 +1,141 @@
+# ─────────────────────────────────────────────────────────────
+# Hestia · Configuración del perfil de Hermes Agent
+# Se instala como ~/.hermes/profiles/hestia/config.yaml.
+# Referencia completa: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+# Las variables ${VAR} se resuelven desde el .env del perfil o del contenedor.
+# Ojo: en `hermes profile update` este archivo se CONSERVA (tus ajustes locales ganan).
+#      Usa --force-config para traer la versión nueva del repo.
+# ─────────────────────────────────────────────────────────────
+
+timezone: "America/Bogota"
+
+# ── Modelos: todo pasa por LiteLLM (config/litellm/config.yaml) ──
+model:
+  default: hestia-smart            # Claude, para el razonamiento principal
+  provider: custom
+  base_url: ${LITELLM_BASE_URL}
+  key_env: LITELLM_MASTER_KEY
+  context_length: 200000
+
+fallback_providers:
+  - provider: custom
+    model: hestia-backup           # OpenRouter, si Anthropic falla
+    base_url: ${LITELLM_BASE_URL}
+    key_env: LITELLM_MASTER_KEY
+
+# Tareas secundarias en el modelo local (privado y gratis).
+# Si el modelo local falla o no le cabe el contexto, LiteLLM las sube a hestia-smart.
+auxiliary:
+  title_generation:
+    base_url: ${LITELLM_BASE_URL}
+    api_key: ${LITELLM_MASTER_KEY}
+    model: hestia-fast
+    timeout: 60
+  session_search:
+    base_url: ${LITELLM_BASE_URL}
+    api_key: ${LITELLM_MASTER_KEY}
+    model: hestia-fast
+    timeout: 60
+  compression:
+    base_url: ${LITELLM_BASE_URL}
+    api_key: ${LITELLM_MASTER_KEY}
+    model: hestia-fast
+    timeout: 120
+
+# ── Skills y automejora ──
+skills:
+  creation_nudge_interval: 15
+  write_approval: true             # las skills que Hestia escriba quedan pendientes de /skills approve
+
+memory:
+  memory_enabled: true
+  user_profile_enabled: true
+
+# ── Seguridad ──
+approvals:
+  mode: manual                     # todo comando peligroso pide tu aprobación
+  timeout: 300                     # sin respuesta → denegado
+  cron_mode: deny                  # los cron nunca ejecutan comandos peligrosos
+  deny:
+    - "rm -rf /*"
+    - "git push --force*"
+    - "curl * | sh"
+    - "curl * | bash"
+
+plugins:
+  enabled:
+    - hestia_guard                 # confirmaciones y auditoría (plugins/hestia_guard)
+    - homeassistant                # se instala con: hermes plugins install homeassistant
+
+# ── Voz ──
+stt:
+  enabled: true
+  provider: local                  # faster-whisper dentro de Hermes (notas de voz de Telegram, voice mode)
+  local:
+    model: small                   # con GPU NVIDIA: turbo
+    # language vacío = detección automática ES/EN
+
+tts:
+  provider: edge                   # gratis. Alternativas: piper (100 % local) | elevenlabs (premium, la misma voz en ES/EN)
+  edge:
+    voice: "es-CO-SalomeNeural"    # español de Colombia. Inglés: en-US-AvaMultilingualNeural
+  piper:
+    voice: es_MX-claude-high
+  elevenlabs:
+    model_id: eleven_flash_v2_5
+
+voice:
+  auto_tts: false
+  stop_phrases: ["stop", "para", "detente", "silencio"]
+
+wake_word:
+  enabled: false                   # actívalo en el PC con /wake on
+  provider: auto
+  phrase: "hey hermes"             # modelo incluido. "Hey Hestia" llega en la fase 4 (voice/wakeword)
+  sensitivity: 0.6
+
+# ── Plataformas ──
+platforms:
+  homeassistant:
+    enabled: true
+    extra:
+      # Eventos de la casa que Hestia vigila y te notifica
+      watch_domains: [binary_sensor, alarm_control_panel, lock]
+      ignore_entities: []
+      cooldown_seconds: 60
+
+# ── Herramientas externas (MCP) ──
+# Actívalas por fase (enabled: true) cuando tengas las credenciales.
+mcp_servers:
+  # Fase 2: MCP Server integrado de Home Assistant. Solo ve las entidades expuestas a Assist.
+  homeassistant:
+    url: "${HASS_URL}/api/mcp"
+    headers:
+      Authorization: "Bearer ${HASS_TOKEN}"
+    enabled: false
+    timeout: 60
+
+  # Fase 3: Google Calendar, Gmail, Tasks y Drive (servicio google-workspace-mcp del compose)
+  google_workspace:
+    url: "${GOOGLE_WORKSPACE_MCP_URL}"
+    enabled: false
+    trust: untrusted               # toda herramienta de escritura (enviar correo, crear evento) pide aprobación
+    timeout: 120
+
+  # Fase 3: GitHub oficial (remoto), solo lectura
+  github:
+    url: "https://api.githubcopilot.com/mcp/"
+    headers:
+      Authorization: "Bearer ${GITHUB_PAT}"
+      X-MCP-Readonly: "true"
+      X-MCP-Toolsets: "repos,issues,pull_requests,actions"
+    enabled: false
+    trust: untrusted
+
+  # Fase 3: n8n (MCP de instancia, n8n ≥ 2.18)
+  n8n:
+    url: "${N8N_MCP_URL}"
+    headers:
+      Authorization: "Bearer ${N8N_MCP_TOKEN}"
+    enabled: false
+    trust: untrusted

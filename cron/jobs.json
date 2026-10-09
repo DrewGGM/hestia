@@ -1,0 +1,36 @@
+{
+  "jobs": [
+    {
+      "id": "hestia-briefing",
+      "name": "Briefing diario",
+      "schedule": "0 7 * * *",
+      "prompt": "Prepara mi briefing diario siguiendo la skill briefing-diario.",
+      "skills": ["briefing-diario"],
+      "deliver": "telegram"
+    },
+    {
+      "id": "hestia-semana-negocios",
+      "name": "Resumen semanal de negocios",
+      "schedule": "0 8 * * 1",
+      "prompt": "Haz el resumen semanal de mis negocios y proyectos siguiendo la skill estado-negocios.",
+      "skills": ["estado-negocios"],
+      "deliver": "telegram"
+    },
+    {
+      "id": "hestia-finanzas-mes",
+      "name": "Resumen financiero mensual",
+      "schedule": "0 9 1 * *",
+      "prompt": "Haz el resumen financiero del mes anterior y lista los pagos de este mes siguiendo la skill finanzas-personales.",
+      "skills": ["finanzas-personales"],
+      "deliver": "telegram"
+    },
+    {
+      "id": "hestia-automejora",
+      "name": "Revisión semanal de memoria y skills",
+      "schedule": "0 20 * * 0",
+      "prompt": "Haz la revisión semanal de la skill automejora: memoria contradictoria o sospechosa, skills que fallaron y skills pendientes de aprobar. Entrégame propuestas, no cambies nada sin mi aprobación.",
+      "skills": ["automejora"],
+      "deliver": "telegram"
+    }
+  ]
+}

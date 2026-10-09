@@ -1,0 +1,95 @@
+# ─────────────────────────────────────────────────────────────
+# Política de hestia_guard
+#   libre      → se ejecuta sin preguntar (salvo que la sesión esté contaminada)
+#   confirmar  → siempre pide aprobación humana
+#   prohibido  → nunca se ejecuta (hay que usar un script de HA con confirmación)
+# Las reglas por "dominio.servicio" ganan sobre las de dominio.
+# Un dominio que no aparece en ninguna lista se trata como "confirmar".
+# ─────────────────────────────────────────────────────────────
+
+libre:
+  - light
+  - media_player
+  - scene
+  - fan
+  - input_boolean
+  - input_select
+  - input_number
+  - button
+  - notify
+  - todo
+  - remote
+  - vacuum
+  - switch            # enchufes. Pasa un enchufe concreto a "confirmar" si controla algo peligroso
+  - script.hestia_abrir_cerradura   # el script mismo pide confirmación en el celular
+  - script.hestia_armar_alarma
+  - script.hestia_modo_salir
+
+confirmar:
+  - climate
+  - water_heater
+  - cover             # persianas, ventanas, puertas de garaje
+  - valve
+  - humidifier
+  - script            # scripts que no aparecen arriba
+  - automation        # activar o desactivar automatizaciones
+  - camera
+  - siren
+
+prohibido:
+  - lock              # usa script.hestia_abrir_cerradura
+  - alarm_control_panel.alarm_disarm
+  - alarm_control_panel
+  - homeassistant     # restart, stop, reload_all...
+  - hassio
+  - shell_command
+  - command_line
+  - python_script
+  - pyscript
+  - rest_command
+  - recorder
+
+# Herramientas que traen contenido NO confiable al contexto.
+# Después de usarlas, toda acción física de esa sesión pide confirmación.
+# Patrones glob sobre el nombre de la herramienta.
+fuentes_no_confiables:
+  - "web_search"
+  - "web_extract"
+  - "browser_*"
+  - "mcp__google_workspace__*gmail*"
+  - "mcp__google_workspace__*calendar*"
+  - "mcp__google_workspace__*drive*"
+  - "mcp__google_workspace__*docs*"
+  - "mcp__github__*"
+  - "mcp__n8n__*"
+
+# Herramientas que actúan sobre el mundo físico (Home Assistant).
+herramientas_fisicas:
+  - "ha_call_service"
+  - "mcp__homeassistant__*"
+
+# Herramientas físicas de solo lectura (nunca se bloquean).
+lectura_fisica:
+  - "mcp__homeassistant__GetLiveContext"
+  - "mcp__homeassistant__GetDateTime"
+  - "mcp__homeassistant__get_*"
+  - "mcp__homeassistant__list_*"
+  - "mcp__homeassistant__search_*"
+
+# Herramientas del MCP de Home Assistant y el dominio que controlan,
+# cuando no traen un "domain" en los argumentos.
+dominio_por_herramienta:
+  HassTurnOn: null          # se deduce de los argumentos, si no → confirmar
+  HassTurnOff: null
+  HassToggle: null
+  HassLightSet: light
+  HassClimateSetTemperature: climate
+  HassSetPosition: cover
+  HassMediaPause: media_player
+  HassMediaUnpause: media_player
+  HassMediaNext: media_player
+  HassMediaPrevious: media_player
+  HassSetVolume: media_player
+  HassVacuumStart: vacuum
+  HassVacuumReturnToBase: vacuum
+  HassFanSetSpeed: fan

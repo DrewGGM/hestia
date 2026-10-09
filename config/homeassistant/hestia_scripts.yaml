@@ -1,0 +1,91 @@
+# ─────────────────────────────────────────────────────────────
+# Hestia · Scripts de Home Assistant para acciones sensibles
+#
+# Cerraduras, alarma y puertas de garaje NUNCA se exponen al agente.
+# El agente solo puede llamar a estos scripts, y cada uno pide confirmación
+# en tu celular (app Companion de HA) antes de actuar.
+#
+# Instalación: copia este archivo a /config/scripts/hestia.yaml y añade en
+# configuration.yaml:
+#     script: !include_dir_merge_named scripts/
+# Después expón SOLO estos scripts a Assist (Ajustes → Asistentes de voz → Exponer).
+# Ajusta los entity_id y notify.mobile_app_* a tu casa.
+# ─────────────────────────────────────────────────────────────
+
+hestia_abrir_cerradura:
+  alias: "Hestia · Abrir cerradura (con confirmación)"
+  description: >-
+    Abre una cerradura solo después de que el dueño lo confirme desde el celular.
+    Úsalo cuando el usuario pida abrir la puerta. Si no hay confirmación en 60 s, no hace nada.
+  mode: single
+  fields:
+    cerradura:
+      description: "entity_id de la cerradura"
+      example: lock.puerta_principal
+      required: true
+      selector:
+        entity:
+          domain: lock
+  sequence:
+    - variables:
+        accion_si: "{{ 'HESTIA_SI_' ~ context.id }}"
+        accion_no: "{{ 'HESTIA_NO_' ~ context.id }}"
+    - action: notify.mobile_app_mi_celular
+      data:
+        title: "🔐 Hestia quiere abrir {{ state_attr(cerradura, 'friendly_name') }}"
+        message: "¿Lo autorizas?"
+        data:
+          actions:
+            - action: "{{ accion_si }}"
+              title: "Sí, abrir"
+            - action: "{{ accion_no }}"
+              title: "No"
+    - wait_for_trigger:
+        - trigger: event
+          event_type: mobile_app_notification_action
+          event_data:
+            action: "{{ accion_si }}"
+        - trigger: event
+          event_type: mobile_app_notification_action
+          event_data:
+            action: "{{ accion_no }}"
+      timeout: "00:01:00"
+      continue_on_timeout: false
+    - if:
+        - condition: template
+          value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action == accion_si }}"
+      then:
+        - action: lock.unlock
+          target:
+            entity_id: "{{ cerradura }}"
+        - action: logbook.log
+          data:
+            name: Hestia
+            message: "abrió {{ cerradura }} con confirmación del dueño"
+
+hestia_armar_alarma:
+  alias: "Hestia · Armar alarma"
+  description: >-
+    Arma la alarma en modo ausente. Armar es seguro y no pide confirmación.
+    DESARMAR no está disponible para el agente.
+  mode: single
+  sequence:
+    - action: alarm_control_panel.alarm_arm_away
+      target:
+        entity_id: alarm_control_panel.casa
+    - action: logbook.log
+      data:
+        name: Hestia
+        message: "armó la alarma"
+
+hestia_modo_salir:
+  alias: "Hestia · Modo salir de casa"
+  description: >-
+    Apaga todas las luces y arma la alarma.
+    Úsalo cuando el usuario diga que sale de casa.
+  mode: single
+  sequence:
+    - action: light.turn_off
+      target:
+        entity_id: all
+    - action: script.hestia_armar_alarma

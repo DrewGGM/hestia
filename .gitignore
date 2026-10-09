@@ -1,0 +1,23 @@
+# Secretos
+.env
+.env.*
+!.env.example
+*.key
+secrets.yaml
+secrets.enc.env
+
+# Datos de runtime (memoria, sesiones, modelos)
+data/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# SO / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

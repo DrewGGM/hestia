@@ -1,0 +1,194 @@
+# ─────────────────────────────────────────────────────────────
+# Hestia · Stack completo
+#
+# Profiles (combínalos según dónde corra):
+#   (sin profile) → cerebro: Hermes (agente Hestia) + LiteLLM (router de modelos)
+#   local         → Ollama (modelo local)        · GPU NVIDIA: añade -f compose.gpu.yaml
+#   voice         → Wyoming: STT, TTS y wake word para Home Assistant
+#   home          → Home Assistant en contenedor (o usa el que ya tengas)
+#   workspace     → MCP de Google Workspace (Calendar, Gmail, Tasks, Drive)
+#   remote        → Cloudflare Tunnel para el dashboard (VPS)
+#
+# Ejemplos:
+#   docker compose up -d                                        # solo cerebro (nube)
+#   docker compose --profile local --profile voice up -d        # casa, CPU
+#   docker compose -f docker-compose.yml -f compose.gpu.yaml --profile local --profile voice up -d
+#
+# Seguridad: todo publica en 127.0.0.1. Para acceso remoto usa Tailscale o Cloudflare Tunnel.
+# ─────────────────────────────────────────────────────────────
+name: hestia
+
+x-hermes: &hermes
+  image: nousresearch/hermes-agent:${HERMES_VERSION:-v0.21.6}
+  env_file: .env
+  environment:
+    LITELLM_BASE_URL: http://litellm:4000/v1
+    GOOGLE_WORKSPACE_MCP_URL: ${GOOGLE_WORKSPACE_MCP_URL:-http://google-workspace-mcp:8000/mcp}
+  volumes:
+    # Volumen con nombre, NO bind mount: en Docker Desktop/Windows un bind mount corrompe state.db
+    - hermes-data:/opt/data
+    - ./:/opt/hestia-src:ro
+
+services:
+  # Instala o actualiza la distribución Hestia dentro del volumen de Hermes y termina.
+  hestia-init:
+    <<: *hermes
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        hermes profile install /opt/hestia-src --force --yes
+        if ! hermes -p hestia plugins list 2>/dev/null | grep -q '^ *homeassistant'; then
+          hermes -p hestia plugins install homeassistant --enable --yes-deps \
+            || echo "[hestia-init] AVISO: no pude instalar el plugin homeassistant (¿sin red?)"
+        fi
+        echo "[hestia-init] perfil hestia listo"
+
+  # El agente: gateway (Telegram/WhatsApp/HA), cron, API compatible con OpenAI y dashboard
+  hestia:
+    <<: *hermes
+    restart: unless-stopped
+    command: ["-p", "hestia", "gateway", "run"]
+    environment:
+      LITELLM_BASE_URL: http://litellm:4000/v1
+      GOOGLE_WORKSPACE_MCP_URL: ${GOOGLE_WORKSPACE_MCP_URL:-http://google-workspace-mcp:8000/mcp}
+      API_SERVER_ENABLED: "true"        # para conectar los satélites de HA al cerebro de Hestia
+      API_SERVER_HOST: 0.0.0.0
+      API_SERVER_KEY: ${HESTIA_API_KEY:?Define HESTIA_API_KEY en .env}
+      HERMES_DASHBOARD: "1"
+      GATEWAY_ALLOW_ALL_USERS: "false"
+    ports:
+      - "127.0.0.1:8642:8642"           # API OpenAI-compatible (Home Assistant → Hestia)
+      - "127.0.0.1:9119:9119"           # dashboard
+    depends_on:
+      hestia-init:
+        condition: service_completed_successfully
+      litellm:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  # Router de modelos: un endpoint para Claude, Ollama y OpenRouter (config/litellm/config.yaml)
+  litellm:
+    # Versión fijada a propósito: las versiones 1.82.7 y 1.82.8 de PyPI traían malware.
+    image: ghcr.io/berriai/litellm:${LITELLM_VERSION:-v1.98.1}
+    restart: unless-stopped
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    env_file: .env
+    environment:
+      OLLAMA_API_BASE: ${OLLAMA_API_BASE:-http://ollama:11434}
+    volumes:
+      - ./config/litellm/config.yaml:/app/config.yaml:ro
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  # ── profile: local ────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:${OLLAMA_VERSION:-latest}
+    profiles: [local]
+    restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_CONTEXT_LENGTH: "16384"
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+
+  ollama-pull:
+    image: ollama/ollama:${OLLAMA_VERSION:-latest}
+    profiles: [local]
+    restart: "no"
+    environment:
+      OLLAMA_HOST: ollama:11434
+    entrypoint: ["sh", "-c", "sleep 3 && ollama pull ${OLLAMA_MODEL:-qwen3.5:4b}"]
+    depends_on: [ollama]
+
+  # ── profile: voice (pipeline de voz de Home Assistant) ────
+  whisper:
+    image: rhasspy/wyoming-whisper:${WYOMING_WHISPER_VERSION:-latest}
+    profiles: [voice]
+    restart: unless-stopped
+    # --stt-library auto elige el backend por idioma (Parakeet/sherpa o faster-whisper)
+    command: >-
+      --model ${WHISPER_MODEL:-small-int8}
+      --language ${WHISPER_LANGUAGE:-es}
+      --stt-library ${WHISPER_LIBRARY:-auto}
+    volumes:
+      - whisper:/data
+    ports:
+      - "127.0.0.1:10300:10300"
+
+  piper:
+    image: rhasspy/wyoming-piper:${WYOMING_PIPER_VERSION:-latest}
+    profiles: [voice]
+    restart: unless-stopped
+    command: --voice ${PIPER_VOICE:-es_MX-claude-high}
+    volumes:
+      - piper:/data
+    ports:
+      - "127.0.0.1:10200:10200"
+
+  openwakeword:
+    image: rhasspy/wyoming-openwakeword:${WYOMING_OWW_VERSION:-latest}
+    profiles: [voice]
+    restart: unless-stopped
+    command: --preload-model ${WAKE_WORD_MODEL:-hey_jarvis} --custom-model-dir /custom
+    volumes:
+      - ./voice/wakeword:/custom:ro
+    ports:
+      - "127.0.0.1:10400:10400"
+
+  # ── profile: home ─────────────────────────────────────────
+  # Si ya tienes Home Assistant (HA OS en una Raspberry/mini-PC), NO uses este profile.
+  # network_mode: host es necesario para descubrir dispositivos (mDNS, Matter). Funciona bien en Linux,
+  # pero no en Docker Desktop para Windows/macOS.
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:${HA_VERSION:-stable}
+    profiles: [home]
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TZ: ${TZ:-America/Bogota}
+    volumes:
+      - ./data/homeassistant:/config
+      - /run/dbus:/run/dbus:ro
+
+  # ── profile: workspace ────────────────────────────────────
+  google-workspace-mcp:
+    build: https://github.com/taylorwilsdon/google_workspace_mcp.git#main
+    profiles: [workspace]
+    restart: unless-stopped
+    environment:
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
+      GOOGLE_OAUTH_REDIRECT_URI: http://localhost:8000/oauth2callback
+      OAUTHLIB_INSECURE_TRANSPORT: "1"
+      USER_GOOGLE_EMAIL: ${USER_GOOGLE_EMAIL}
+      TOOL_TIER: core
+      TOOLS: gmail calendar tasks drive
+    volumes:
+      - google-creds:/app/store_creds
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  # ── profile: remote ───────────────────────────────────────
+  # Publica el dashboard (hestia:9119) detrás de Cloudflare Access. Configura la ruta en Zero Trust.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: [remote]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+
+volumes:
+  hermes-data:
+  ollama:
+  whisper:
+  piper:
+  google-creds:

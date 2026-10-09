@@ -1,0 +1,43 @@
+# Manifiesto de la distribución de perfil de Hermes Agent.
+# Instalación:  hermes profile install github.com/DrewGGM/hestia --alias
+# Actualizar:   hermes profile update hestia
+# Doc: https://hermes-agent.nousresearch.com/docs/user-guide/profile-distributions
+name: hestia
+version: 0.1.0
+description: "Hestia: asistente personal bilingüe tipo JARVIS con domótica (Home Assistant), voz, agenda, correo y skills que se automejoran."
+hermes_requires: ">=0.21.5"
+author: "Andrew Garcia (DrewGGM)"
+license: "MIT"
+
+# Solo esto se copia al perfil. El resto del repo (docker, docs, voz) no entra en ~/.hermes.
+distribution_owned:
+  - SOUL.md
+  - config.yaml
+  - skills
+  - cron/jobs.json
+  - plugins/hestia_guard
+  - distribution.yaml
+
+env_requires:
+  - name: LITELLM_BASE_URL
+    description: "Endpoint del router de modelos (LiteLLM). En Docker: http://litellm:4000/v1. En local: http://localhost:4000/v1"
+    required: true
+    default: "http://localhost:4000/v1"
+  - name: LITELLM_MASTER_KEY
+    description: "Clave del proxy LiteLLM (la misma que en el .env del docker-compose)"
+    required: true
+  - name: TELEGRAM_BOT_TOKEN
+    description: "Token del bot de Telegram (@BotFather)"
+    required: false
+  - name: TELEGRAM_ALLOWED_USERS
+    description: "Tu ID numérico de Telegram (@userinfobot). Solo esos usuarios pueden hablarle"
+    required: false
+  - name: HASS_URL
+    description: "URL de Home Assistant, p. ej. http://homeassistant.local:8123"
+    required: false
+  - name: HASS_TOKEN
+    description: "Long-Lived Access Token del usuario NO admin 'hestia' de Home Assistant"
+    required: false
+  - name: ELEVENLABS_API_KEY
+    description: "Opcional: voz premium (la misma voz en ES y EN)"
+    required: false

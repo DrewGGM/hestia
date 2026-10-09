@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────
+# Hestia · Satélite de voz (Home Assistant Voice PE)
+#
+# Parte del firmware oficial del Voice PE y le cambia el nombre.
+# Fase 2: usa las wake words de fábrica:
+#   "Hey Jarvis" → pipeline en español
+#   "Okay Nabu"  → pipeline en inglés
+#   (HA ≥ 2025.10 permite asignar un pipeline distinto a cada wake word)
+# Fase 4: descomenta el bloque micro_wake_word para usar "Hey Hestia"
+#   (se entrena siguiendo voice/wakeword/README.md).
+#
+# Uso: ESPHome Builder → New device → pegar este YAML → Install.
+# ─────────────────────────────────────────────────────────────
+substitutions:
+  name: hestia-sala
+  friendly_name: Hestia Sala
+
+packages:
+  Nabu Casa.Home Assistant Voice PE: github://esphome/home-assistant-voice-pe/home-assistant-voice.yaml
+
+esphome:
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+
+api:
+  encryption:
+    key: !secret hestia_api_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# ── Fase 4: wake word personalizada ─────────────────────────
+# micro_wake_word:
+#   models:
+#     - model: https://raw.githubusercontent.com/DrewGGM/hestia/main/voice/wakeword/hey_hestia.json
+#       id: hey_hestia

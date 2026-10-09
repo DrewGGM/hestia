@@ -1,0 +1,13 @@
+name: hestia_guard
+version: 0.1.0
+description: >-
+  Guardián de Hestia. Exige confirmación humana para acciones físicas sensibles
+  (cerraduras, alarma, clima, persianas), bloquea servicios prohibidos de Home Assistant,
+  marca la sesión como contaminada tras leer contenido externo (correo, web, calendario)
+  y registra cada acción física en un log de auditoría.
+author: Andrew Garcia
+provides_hooks:
+  - pre_tool_call
+  - post_tool_call
+  - on_session_reset
+  - on_session_end

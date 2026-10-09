@@ -1,0 +1,11 @@
+# Override para GPU NVIDIA (requiere NVIDIA Container Toolkit, o Docker Desktop + WSL2 en Windows).
+#   docker compose -f docker-compose.yml -f compose.gpu.yaml --profile local up -d
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
