@@ -9,7 +9,7 @@ Cada fase deja algo **usable**. Hestia sirve desde la fase 1. Las siguientes sum
 
 ## Fase 1: Cerebro + chat (semana 1)
 **Meta:** hablar con Hestia por Telegram (texto y notas de voz) y desde la terminal del PC.
-- [ ] `docker compose --profile core up -d`: Hermes + LiteLLM
+- [ ] `docker compose up -d`: Hermes + LiteLLM (el núcleo no necesita profile)
 - [ ] Claude como modelo principal y Ollama `qwen3.5:4b` como modelo auxiliar
 - [ ] Personalidad de Hestia (`SOUL.md`) bilingüe
 - [ ] Gateway de Telegram con allowlist
