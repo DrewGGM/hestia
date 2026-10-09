@@ -37,16 +37,50 @@ Plantilla sugerida:
 ## Cambiar modelos
 Todo se hace en `config/litellm/config.yaml`. Hermes solo conoce los alias:
 
-| Alias | Por defecto | Uso |
-|---|---|---|
-| `hestia-smart` | Claude Sonnet 5.5 | Modelo principal |
-| `hestia-deep` | Claude Opus 5.5 | Razonamiento profundo |
-| `hestia-fast` | Ollama `qwen3.5:4b` | Títulos, búsqueda de sesiones, compresión |
-| `hestia-backup` | OpenRouter | Respaldo |
+| Alias | Por defecto (vía OpenRouter) | USD por millón de tokens, entrada/salida | Uso |
+|---|---|---|---|
+| `hestia-smart` | Claude Haiku 5.5 | 0,10 / 0,50 | Modelo principal: chat, casa, briefings |
+| `hestia-deep` | Claude Sonnet 5.5 | 2 / 10 | Tareas difíciles: `/model hestia-deep` |
+| `hestia-max` | Claude Opus 5.5 | 4 / 20 | Lo máximo, solo cuando lo pidas: `/model hestia-max` |
+| `hestia-fast` | Ollama `qwen3.5:4b` (local) | gratis | Títulos, búsqueda de sesiones, compresión |
+| `hestia-backup` | Gemini 3.8 Flash | 0,75 / 3,75 | Respaldo si Claude falla (otro proveedor) |
+
+Precios de octubre de 2026. Los vigentes están en [openrouter.ai/models](https://openrouter.ai/models).
+
+### OpenRouter (por defecto)
+[OpenRouter](https://openrouter.ai) da acceso a cientos de modelos (Claude, Gemini, GPT, DeepSeek…) con **una sola key** y pago por uso, sin mensualidad.
+1. Crea una cuenta en openrouter.ai y recarga créditos (con 5–10 USD alcanza para empezar).
+2. Crea una key en [openrouter.ai/keys](https://openrouter.ai/keys) y ponle un **límite de crédito**. Es tu tope de gasto real.
+3. Ponla en `.env` como `OPENROUTER_API_KEY`.
+
+### API de Anthropic directa (alternativa)
+En `config/litellm/config.yaml`, en cada alias de Claude, comenta las líneas de OpenRouter, descomenta las de *Anthropic directo* y llena `ANTHROPIC_API_KEY`. Pagas un poco menos que por OpenRouter, pero solo tienes Claude.
+
+### ¿Y mi suscripción de Claude Pro/Max?
+**No se usa como cerebro de Hestia.** Los términos de Anthropic reservan el login de la suscripción para Claude Code y sus apps, y usarlo en un agente de terceros puede hacer que te suspendan la cuenta. Hestia incluso le impide a Hermes tomar prestado tu login de Claude Code (`auth.adopt_external_logins: false`). Detalles en el [ADR-0005](adr/0005-modelos-y-suscripcion.md).
+
+Lo que sí puedes hacer es **delegarle programación a Claude Code** con tu suscripción. Ver la sección siguiente.
 
 Para que Hestia use un modelo **solo local**, cambia `hestia-smart` a `ollama_chat/qwen3.6:27b` (necesitas 24 GB de VRAM). Hermes recomienda 64k de contexto o más para el modelo principal.
 
 **Enrutamiento por complejidad (opcional):** LiteLLM trae un *auto router* que clasifica cada petición (SIMPLE/MEDIUM/COMPLEX) y la envía al modelo adecuado. Ver la [documentación del auto router](https://docs.litellm.ai/docs/auto_router/). Jev (TypeSafe AI) puede reemplazar al clasificador cuando haya acceso a su API (roadmap, fase 3).
+
+## Claude Code con tu suscripción (programación)
+Con esto, cuando le pidas a Hestia *"usa Claude Code para arreglar el test roto de mi-web"*, ella le pasa el encargo al **CLI oficial de Claude Code**, que trabaja en el repo con tu plan Pro/Max. Te pide aprobación antes de cada encargo (skill [`delegar-claude-code`](../skills/desarrollo/delegar-claude-code/SKILL.md)).
+
+**Docker**
+1. En `.env`, apunta `HESTIA_WORKSPACE` a la carpeta de tus proyectos (en Windows, con barras normales: `C:/Users/tu-usuario/proyectos`) y reinicia con `docker compose up -d`. Se monta en `/workspace`.
+2. En tu PC, en una terminal aparte, corre `claude setup-token`. Inicias sesión en el navegador y te muestra un token `sk-ant-oat01-…` válido por un año.
+3. Corre `./scripts/claude-code-login.sh` y pega el token (no se muestra). El script lo guarda en el volumen con permisos 600 y prueba que funciona.
+
+**Nativo (Linux, macOS o WSL)**: instala Claude Code (`npm install -g @anthropic-ai/claude-code`), inicia sesión con `claude` y copia `scripts/claude-hestia` a tu `PATH`. Sin archivo de token, el wrapper usa el login que ya tienes. En Windows nativo usa Docker o WSL para esta función.
+
+**Reglas**
+- **Nunca pegues el token en un chat**, tampoco con Hestia.
+- Cada encargo pide tu aprobación y muestra el texto exacto que recibirá Claude Code. Si la conversación leyó correos o webs, la delegación se bloquea: revisa y usa `/guard limpiar`, o abre `/new`.
+- Claude Code no recibe credenciales de push: los commits quedan locales y el push lo haces tú.
+- Si Claude Code se queda sin cupo del plan, Hestia te avisa y no reintenta.
+- Para revocar el acceso: borra el token (`docker compose exec -u hermes hestia rm /opt/data/secrets/claude_code_oauth_token`) y revócalo en claude.ai.
 
 ## Activar integraciones por fase
 En `config.yaml` → `mcp_servers`, cambia `enabled: false` a `true` cuando tengas las credenciales:

@@ -36,8 +36,8 @@ flowchart TB
   subgraph Modelos["4 · Modelos (LiteLLM :4000)"]
     R{"Router<br/>fallbacks + complejidad<br/>(Jev opcional)"}
     OL["Ollama local<br/>qwen3.5:4b / gemma4"]
-    CL["Claude (Anthropic)<br/>tareas complejas"]
-    OR["OpenRouter<br/>respaldo"]
+    CL["Claude vía OpenRouter<br/>Haiku · Sonnet · Opus"]
+    OR["Gemini vía OpenRouter<br/>respaldo"]
   end
 
   subgraph Herramientas["5 · Herramientas (MCP)"]

@@ -15,7 +15,9 @@ echo "─ Archivos"
 if [ -f .env ]; then
   # shellcheck disable=SC1091
   set -a; . ./.env; set +a
-  [ -n "${ANTHROPIC_API_KEY:-}" ] && ok "ANTHROPIC_API_KEY definida" || fail "ANTHROPIC_API_KEY vacía"
+  if [ -n "${OPENROUTER_API_KEY:-}" ]; then ok "OPENROUTER_API_KEY definida"
+  elif [ -n "${ANTHROPIC_API_KEY:-}" ]; then ok "ANTHROPIC_API_KEY definida (recuerda cambiar los alias en config/litellm/config.yaml)"
+  else fail "Falta OPENROUTER_API_KEY (o ANTHROPIC_API_KEY)"; fi
   case "${LITELLM_MASTER_KEY:-}" in ""|*cambia-esto*) fail "LITELLM_MASTER_KEY sin cambiar";; *) ok "LITELLM_MASTER_KEY definida";; esac
   case "${HESTIA_API_KEY:-}" in ""|*cambia-esto*) fail "HESTIA_API_KEY sin cambiar";; *) ok "HESTIA_API_KEY definida";; esac
   [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && { [ -n "${TELEGRAM_ALLOWED_USERS:-}" ] && ok "Telegram con allowlist" || fail "TELEGRAM_BOT_TOKEN sin TELEGRAM_ALLOWED_USERS: cualquiera podría hablarle"; } || warn "Telegram no configurado"
@@ -42,6 +44,9 @@ code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' -H "Authorization: Bearer ${H
 if docker compose exec -T hestia hermes -p hestia plugins list 2>/dev/null | grep -q hestia_guard; then
   ok "plugin hestia_guard cargado"
 else warn "no pude confirmar el plugin hestia_guard (docker compose exec hestia hermes -p hestia plugins list)"; fi
+if docker compose exec -T -u hermes hestia test -s /opt/data/secrets/claude_code_oauth_token 2>/dev/null; then
+  ok "Claude Code con tu suscripción configurado (prueba: docker compose exec -u hermes hestia claude-hestia --check)"
+else warn "Claude Code sin token (opcional): ./scripts/claude-code-login.sh"; fi
 
 echo
 [ "$FAILED" = 0 ] && echo "Todo bien ✔" || { echo "Hay problemas que resolver ✘"; exit 1; }

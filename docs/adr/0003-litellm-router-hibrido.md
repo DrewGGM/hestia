@@ -1,6 +1,6 @@
 # ADR-0003: Enrutamiento híbrido local/nube con LiteLLM
 
-- **Estado:** aceptada (2026-10-09)
+- **Estado:** aceptada (2026-10-09). Los modelos concretos de cada alias los fija el [ADR-0005](0005-modelos-y-suscripcion.md).
 
 ## Contexto
 Queremos privacidad y latencia baja en las órdenes simples, y potencia en las tareas complejas. La documentación de HA advierte que los modelos pequeños fallan más al controlar la casa, y Hermes pide ≥64k de contexto cuando el modelo principal es Ollama.

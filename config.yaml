@@ -11,7 +11,7 @@ timezone: "America/Bogota"
 
 # ── Modelos: todo pasa por LiteLLM (config/litellm/config.yaml) ──
 model:
-  default: hestia-smart            # Claude, para el razonamiento principal
+  default: hestia-smart            # Claude Haiku: el día a día. /model hestia-deep (Sonnet) o hestia-max (Opus) cuando haga falta
   provider: custom
   base_url: ${LITELLM_BASE_URL}
   key_env: LITELLM_MASTER_KEY
@@ -19,7 +19,7 @@ model:
 
 fallback_providers:
   - provider: custom
-    model: hestia-backup           # OpenRouter, si Anthropic falla
+    model: hestia-backup           # otro proveedor (Gemini), si Claude falla
     base_url: ${LITELLM_BASE_URL}
     key_env: LITELLM_MASTER_KEY
 
@@ -52,6 +52,13 @@ memory:
   user_profile_enabled: true
 
 # ── Seguridad ──
+auth:
+  # Hermes, por defecto, toma prestado el login de Claude Code (~/.claude) y de Codex si los encuentra.
+  # Eso usaría tu suscripción de Claude en una app de terceros, lo que va contra los términos de
+  # Anthropic, y además puede cerrarte la sesión de Claude Code (el token se renueva una sola vez).
+  # La suscripción solo se usa a través del CLI oficial: skill delegar-claude-code (ADR-0005).
+  adopt_external_logins: false
+
 approvals:
   mode: manual                     # todo comando peligroso pide tu aprobación
   timeout: 300                     # sin respuesta → denegado

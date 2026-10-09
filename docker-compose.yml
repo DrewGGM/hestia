@@ -19,7 +19,14 @@
 name: hestia
 
 x-hermes: &hermes
-  image: nousresearch/hermes-agent:${HERMES_VERSION:-v0.21.6}
+  # Imagen oficial de Hermes + Claude Code CLI (docker/Dockerfile)
+  image: hestia-agent:${HERMES_VERSION:-v0.21.6}
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+    args:
+      HERMES_VERSION: ${HERMES_VERSION:-v0.21.6}
+      CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.296}
   env_file: .env
   environment:
     LITELLM_BASE_URL: http://litellm:4000/v1
@@ -59,6 +66,12 @@ services:
       API_SERVER_KEY: ${HESTIA_API_KEY:?Define HESTIA_API_KEY en .env}
       HERMES_DASHBOARD: "1"
       GATEWAY_ALLOW_ALL_USERS: "false"
+    volumes:
+      - hermes-data:/opt/data
+      - ./:/opt/hestia-src:ro
+      # Tus proyectos de código, para delegar en Claude Code (skill delegar-claude-code).
+      # Aquí un bind mount está bien: solo es código, no la base de datos de Hermes.
+      - ${HESTIA_WORKSPACE:-./workspace}:/workspace
     ports:
       - "127.0.0.1:8642:8642"           # API OpenAI-compatible (Home Assistant → Hestia)
       - "127.0.0.1:9119:9119"           # dashboard

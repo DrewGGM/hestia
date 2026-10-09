@@ -3,20 +3,40 @@
 # Un único endpoint OpenAI-compatible en http://litellm:4000/v1
 # Hermes solo conoce estos alias, así que cambiar de modelo no toca Hermes.
 # Doc: https://docs.litellm.ai/docs/proxy/configs
+#
+# Por defecto todo va por OpenRouter: una sola key y un tope de gasto en su panel.
+# ¿Prefieres la API de Anthropic directa? Descomenta las líneas "Anthropic directo"
+# de cada alias y comenta las de OpenRouter (ver docs/03-configuracion.md).
+# Precios de referencia (USD por millón de tokens, entrada/salida, oct-2026).
 # ─────────────────────────────────────────────────────────────
 
 model_list:
-  # Cerebro principal: tareas complejas, planificación, redacción, código
+  # Día a día: chat, casa, briefings, captura. Barato y rápido, con 1M de contexto.
   - model_name: hestia-smart
     litellm_params:
-      model: anthropic/claude-sonnet-5-5
-      api_key: os.environ/ANTHROPIC_API_KEY
+      model: openrouter/anthropic/claude-haiku-5.5          # 0.10 / 0.50
+      api_key: os.environ/OPENROUTER_API_KEY
+      # Anthropic directo:
+      # model: anthropic/claude-haiku-5-5
+      # api_key: os.environ/ANTHROPIC_API_KEY
 
-  # Razonamiento profundo bajo demanda ("piénsalo bien", análisis largos)
+  # Tareas difíciles: planificación, redacción larga, análisis. En el chat: /model hestia-deep
   - model_name: hestia-deep
     litellm_params:
-      model: anthropic/claude-opus-5-5
-      api_key: os.environ/ANTHROPIC_API_KEY
+      model: openrouter/anthropic/claude-sonnet-5.5         # 2 / 10
+      api_key: os.environ/OPENROUTER_API_KEY
+      # Anthropic directo:
+      # model: anthropic/claude-sonnet-5-5
+      # api_key: os.environ/ANTHROPIC_API_KEY
+
+  # Lo máximo, solo cuando lo pidas: /model hestia-max
+  - model_name: hestia-max
+    litellm_params:
+      model: openrouter/anthropic/claude-opus-5.5           # 4 / 20
+      api_key: os.environ/OPENROUTER_API_KEY
+      # Anthropic directo:
+      # model: anthropic/claude-opus-5-5
+      # api_key: os.environ/ANTHROPIC_API_KEY
 
   # Local y privado: órdenes simples, resúmenes cortos, compresión de contexto.
   # ollama_chat/ es el prefijo recomendado para tool calling.
@@ -29,18 +49,19 @@ model_list:
     model_info:
       supports_function_calling: true
 
-  # Respaldo si Anthropic falla o se queda sin cuota (elige cualquier modelo de OpenRouter)
+  # Respaldo de OTRO proveedor: si Anthropic cae, Hestia sigue funcionando.
   - model_name: hestia-backup
     litellm_params:
-      model: openrouter/anthropic/claude-sonnet-4.5
+      model: openrouter/google/gemini-3.8-flash             # 0.75 / 3.75
       api_key: os.environ/OPENROUTER_API_KEY
 
 router_settings:
-  # Si el modelo local falla, sube a la nube. Si la nube falla, usa el respaldo.
+  # Si el modelo local falla, sube a la nube. Si Claude falla, usa el respaldo.
   fallbacks:
     - hestia-fast: ["hestia-smart"]
     - hestia-smart: ["hestia-backup"]
     - hestia-deep: ["hestia-smart"]
+    - hestia-max: ["hestia-deep"]
   # Si el contexto no cabe en el modelo local, pásalo al grande
   context_window_fallbacks:
     - hestia-fast: ["hestia-smart"]

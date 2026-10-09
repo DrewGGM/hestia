@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Hestia · ejecuta el CLI oficial de Claude Code con TU suscripción (Pro/Max).
+#
+# Es la única vía por la que Hestia usa la suscripción: el binario oficial, sin modificar,
+# llamado por ti a través de Hestia (ver docs/adr/0005-modelos-y-suscripcion.md).
+#
+# Aislamiento:
+#   - El token vive en un archivo (no en .env), así que Hermes no lo ve en su entorno
+#     ni puede usarlo como proveedor de modelos.
+#   - Claude Code corre con un entorno LIMPIO: no hereda ANTHROPIC_API_KEY (nunca se cobra a la API),
+#     ni los tokens de Telegram, Home Assistant, GitHub, etc.
+#   - Sin credenciales de git push: Claude Code puede hacer commits locales, y el push lo decides tú.
+#
+# Uso (lo invoca la skill delegar-claude-code):
+#   claude-hestia -p "tarea" --permission-mode acceptEdits --allowedTools "Read,Edit,Write,Glob,Grep"
+#   claude-hestia --check        # verifica que el token funciona
+set -euo pipefail
+
+TOKEN_FILE="${HESTIA_CLAUDE_TOKEN_FILE:-${HOME}/secrets/claude_code_oauth_token}"
+CLAUDE_HOME="${HESTIA_CLAUDE_HOME:-${HOME}/claude-code}"
+CLAUDE_BIN="$(command -v claude || true)"
+
+if [ -z "$CLAUDE_BIN" ]; then
+  echo "claude-hestia: Claude Code no está instalado (npm install -g @anthropic-ai/claude-code)" >&2
+  exit 127
+fi
+
+if [ "${1:-}" = "--check" ]; then
+  set -- -p "Responde únicamente: OK"
+fi
+
+clean_env=(
+  "PATH=${PATH}"
+  "LANG=${LANG:-C.UTF-8}"
+  "TERM=dumb"
+  "TZ=${TZ:-UTC}"
+  "DISABLE_AUTOUPDATER=1"
+)
+
+if [ -s "$TOKEN_FILE" ]; then
+  # Modo Docker/servidor: token de `claude setup-token` guardado con scripts/claude-code-login.sh
+  token="$(tr -d '[:space:]' < "$TOKEN_FILE")"
+  mkdir -p "$CLAUDE_HOME"
+  clean_env+=("HOME=${CLAUDE_HOME}" "CLAUDE_CODE_OAUTH_TOKEN=${token}")
+elif [ -f /.dockerenv ]; then
+  echo "claude-hestia: falta el token de tu suscripción. Corre 'claude setup-token' en tu PC y luego ./scripts/claude-code-login.sh" >&2
+  exit 1
+else
+  # Modo nativo: usa el login que ya tienes en este equipo (claude /login con tu cuenta)
+  clean_env+=("HOME=${HOME}")
+  [ -n "${CLAUDE_CONFIG_DIR:-}" ] && clean_env+=("CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR}")
+fi
+
+exec env -i "${clean_env[@]}" "$CLAUDE_BIN" "$@"

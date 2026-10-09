@@ -26,3 +26,13 @@ jobs:
             --profile local --profile voice --profile home --profile workspace --profile remote config -q
       - name: shellcheck
         run: shellcheck -S warning scripts/*.sh
+
+  image:
+    # Construye la imagen hestia-agent (Hermes + Claude Code) y comprueba que el CLI y el wrapper existen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker build
+        run: |
+          docker build -f docker/Dockerfile -t hestia-agent:ci .
+          docker run --rm --entrypoint sh hestia-agent:ci -c 'claude --version && test -x /usr/local/bin/claude-hestia'

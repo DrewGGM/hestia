@@ -12,7 +12,7 @@ Hay dos formas de instalar Hestia y se pueden combinar:
 | | Mínimo | Recomendado |
 |---|---|---|
 | Servidor | 2 vCPU, 4 GB RAM, Docker 24+ | 4+ núcleos, 16 GB RAM, GPU NVIDIA de 8 GB o más para el modelo local |
-| Cuentas | API key de Anthropic | + bot de Telegram, OpenRouter (respaldo), Google Cloud (OAuth) |
+| Cuentas | API key de OpenRouter (o de Anthropic) | + bot de Telegram, Claude Pro/Max para delegar programación, Google Cloud (OAuth) |
 | Casa | — | Home Assistant + al menos un satélite Voice PE |
 
 ## A. Servidor con Docker
@@ -21,7 +21,7 @@ Hay dos formas de instalar Hestia y se pueden combinar:
 git clone https://github.com/DrewGGM/hestia.git
 cd hestia
 cp .env.example .env
-# Edita .env: ANTHROPIC_API_KEY, LITELLM_MASTER_KEY, HESTIA_API_KEY, TELEGRAM_*
+# Edita .env: OPENROUTER_API_KEY, LITELLM_MASTER_KEY, HESTIA_API_KEY, TELEGRAM_*
 ```
 
 Elige los profiles según tu caso:
@@ -41,6 +41,7 @@ docker compose --profile local --profile voice --profile home --profile workspac
 ```
 
 Qué pasa al arrancar:
+0. La primera vez, Compose construye la imagen `hestia-agent`: la oficial de Hermes más el CLI de Claude Code ([`docker/Dockerfile`](../docker/Dockerfile)).
 1. `hestia-init` instala la distribución (este repo) como perfil `hestia` dentro del volumen de Hermes e instala el plugin `homeassistant`.
 2. `litellm` levanta el router de modelos en `:4000`.
 3. `hestia` arranca el gateway: Telegram, cron, eventos de HA, la API en `:8642` y el dashboard en `:9119`.

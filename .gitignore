@@ -21,3 +21,6 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+# Proyectos montados en /workspace (HESTIA_WORKSPACE)
+workspace/

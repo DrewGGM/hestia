@@ -1,9 +1,10 @@
 """hestia_guard: plugin de seguridad de Hestia para Hermes Agent.
 
 Hooks:
-  pre_tool_call   → bloquea o pide aprobación para acciones físicas según policy.yaml
+  pre_tool_call   → bloquea o pide aprobación para acciones físicas y para delegar
+                    en agentes de código (Claude Code, Codex...), según policy.yaml
   post_tool_call  → marca la sesión como contaminada si una herramienta trajo contenido externo
-                    y audita las acciones físicas ejecutadas
+                    y audita las acciones físicas y las delegaciones ejecutadas
   on_session_reset / on_session_end → limpia la marca de contaminación
 Comando:
   /guard [estado|limpiar] → muestra o limpia la marca de la sesión actual
@@ -35,8 +36,12 @@ def _on_post_tool_call(tool_name: str = "", args: Any = None, result: Any = None
     if _guard is None:
         return
     _guard.marcar_si_no_confiable(tool_name, session_id)
-    if _guard.es_fisica(tool_name):
-        domain, service, entity = extraer_accion(tool_name, args if isinstance(args, dict) else {}, _guard.policy)
+    args = args if isinstance(args, dict) else {}
+    agente = _guard.delegacion(tool_name, args)
+    if agente:
+        _guard.auditar("ejecutado", tool_name, f"delegar → {agente}", session_id, status=status)
+    elif _guard.es_fisica(tool_name):
+        domain, service, entity = extraer_accion(tool_name, args, _guard.policy)
         _guard.auditar("ejecutado", tool_name, f"{domain}.{service}" + (f" → {entity}" if entity else ""),
                        session_id, status=status)
 

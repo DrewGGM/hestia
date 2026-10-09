@@ -15,6 +15,10 @@ LIBRE, CONFIRMAR, PROHIBIDO = "libre", "confirmar", "prohibido"
 
 _ENTITY_RE = re.compile(r"^([a-z_][a-z0-9_]*)\.[a-z0-9_]+$")
 
+# Valores por defecto de la delegación: se usan también si policy.yaml no se puede leer.
+DELEGACION_HERRAMIENTAS = ["terminal"]
+DELEGACION_COMANDOS = ["claude-hestia", "claude", "codex", "opencode"]
+
 
 @dataclass
 class Policy:
@@ -25,6 +29,8 @@ class Policy:
     herramientas_fisicas: list[str] = field(default_factory=list)
     lectura_fisica: list[str] = field(default_factory=list)
     dominio_por_herramienta: dict[str, Optional[str]] = field(default_factory=dict)
+    delegacion_herramientas: list[str] = field(default_factory=lambda: list(DELEGACION_HERRAMIENTAS))
+    delegacion_comandos: list[str] = field(default_factory=lambda: list(DELEGACION_COMANDOS))
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Policy":
@@ -36,6 +42,8 @@ class Policy:
             herramientas_fisicas=list(data.get("herramientas_fisicas") or []),
             lectura_fisica=list(data.get("lectura_fisica") or []),
             dominio_por_herramienta=dict(data.get("dominio_por_herramienta") or {}),
+            delegacion_herramientas=list((data.get("delegacion") or {}).get("herramientas") or DELEGACION_HERRAMIENTAS),
+            delegacion_comandos=list((data.get("delegacion") or {}).get("comandos") or DELEGACION_COMANDOS),
         )
 
     @classmethod
@@ -72,6 +80,19 @@ def _domain_of(entity: Any) -> Optional[str]:
         if m:
             return m.group(1)
     return None
+
+
+def comando_delegado(command: Any, comandos: list[str]) -> Optional[str]:
+    """Si el comando de shell invoca un agente de código (claude, codex...), devuelve cuál.
+
+    Reconoce el comando al inicio, tras ; && || | ( o un espacio, y también con ruta (/usr/local/bin/claude).
+    Ante la duda prefiere reconocerlo: un falso positivo solo cuesta una confirmación de más.
+    """
+    if not isinstance(command, str) or not comandos:
+        return None
+    nombres = "|".join(re.escape(c) for c in sorted(comandos, key=len, reverse=True))
+    m = re.search(rf"(?:^|[\s;&|(`$])(?:[\w./~-]*/)?({nombres})(?=$|[\s;&|)`])", command)
+    return m.group(1) if m else None
 
 
 def extraer_accion(tool_name: str, args: dict[str, Any], policy: Policy) -> tuple[Optional[str], Optional[str], Optional[str]]:
@@ -125,9 +146,45 @@ class Guard:
     def es_fisica(self, tool_name: str) -> bool:
         return _match(tool_name, self.policy.herramientas_fisicas) and not _match(tool_name, self.policy.lectura_fisica)
 
+    def delegacion(self, tool_name: str, args: dict[str, Any]) -> Optional[str]:
+        """Agente de código al que se delega en esta llamada, o None."""
+        if not _match(tool_name, self.policy.delegacion_herramientas):
+            return None
+        return comando_delegado((args or {}).get("command"), self.policy.delegacion_comandos)
+
+    def _decidir_delegacion(self, tool_name: str, agente: str, args: dict[str, Any],
+                            session_id: Optional[str], turn_id: Optional[str]) -> dict[str, str]:
+        comando = str((args or {}).get("command") or "")
+        resumen = comando if len(comando) <= 400 else comando[:400] + "…"
+        accion = f"delegar → {agente}"
+        origen = self.contaminada(session_id)
+        if origen:
+            self.auditar("bloqueado", tool_name, accion, session_id, PROHIBIDO, origen)
+            return {
+                "action": "block",
+                "message": (
+                    f"hestia_guard bloqueó la delegación a {agente}: en esta conversación se leyó contenido "
+                    f"externo ({origen}) y un agente de código ejecuta lo que le pidan. Si el encargo viene "
+                    "de ti, revisa el contenido y usa /guard limpiar, o empieza una conversación nueva con /new."
+                ),
+            }
+        self.auditar("aprobacion", tool_name, accion, session_id, CONFIRMAR, None)
+        return {
+            "action": "approve",
+            "message": (
+                f"🧑‍💻 Hestia quiere delegar una tarea a {agente}, que puede leer y modificar código "
+                f"con tu suscripción:\n\n{resumen}\n\n¿Lo autorizas?"
+            ),
+            # Por turno: "permitir siempre" no se vuelve un permiso permanente para delegar.
+            "rule_key": f"hestia_guard:delegacion:{session_id}:{turn_id or time.time()}",
+        }
+
     def decidir(self, tool_name: str, args: dict[str, Any], session_id: Optional[str] = None,
                 turn_id: Optional[str] = None) -> Optional[dict[str, str]]:
         """Directiva para pre_tool_call: None (permitir), block o approve."""
+        agente = self.delegacion(tool_name, args)
+        if agente:
+            return self._decidir_delegacion(tool_name, agente, args, session_id, turn_id)
         if not self.es_fisica(tool_name):
             return None
         domain, service, entity = extraer_accion(tool_name, args, self.policy)

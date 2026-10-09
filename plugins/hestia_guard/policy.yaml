@@ -63,6 +63,13 @@ fuentes_no_confiables:
   - "mcp__github__*"
   - "mcp__n8n__*"
 
+# Delegación a agentes de código (Claude Code con tu suscripción, Codex, OpenCode).
+# Ejecutan código real: SIEMPRE piden confirmación (mostrando el encargo completo)
+# y se BLOQUEAN si la sesión leyó contenido externo. Ver la skill delegar-claude-code.
+delegacion:
+  herramientas: ["terminal"]
+  comandos: ["claude-hestia", "claude", "codex", "opencode"]
+
 # Herramientas que actúan sobre el mundo físico (Home Assistant).
 herramientas_fisicas:
   - "ha_call_service"

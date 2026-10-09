@@ -111,3 +111,52 @@ def test_regla_especifica_gana():
     p = guard.Policy.from_dict({"libre": ["switch"], "confirmar": ["switch.turn_off"]})
     assert p.nivel("switch", "turn_on") == "libre"
     assert p.nivel("switch", "turn_off") == "confirmar"
+
+
+# ── Delegación a agentes de código ──────────────────────────
+@pytest.mark.parametrize("cmd", [
+    "claude-hestia -p 'arregla el test roto' --permission-mode acceptEdits",
+    "cd /workspace/web && claude-hestia -p 'x'",
+    "/usr/local/bin/claude -p 'x'",
+    "echo hola; codex exec 'x'",
+    "(opencode run 'x')",
+])
+def test_delegacion_pide_confirmacion(g, cmd):
+    d = g.decidir("terminal", {"command": cmd}, "s1", "t1")
+    assert d["action"] == "approve"
+    assert cmd[:40] in d["message"]
+    assert d["rule_key"] == "hestia_guard:delegacion:s1:t1"
+
+
+@pytest.mark.parametrize("cmd", ["ls -la", "git status", "npm run build", "cat claude.md", "python claudette.py"])
+def test_comandos_normales_no_son_delegacion(g, cmd):
+    assert g.decidir("terminal", {"command": cmd}, "s1") is None
+
+
+def test_delegacion_solo_en_herramientas_de_shell(g):
+    assert g.decidir("web_search", {"command": "claude -p x", "query": "claude"}, "s1") is None
+
+
+def test_delegacion_bloqueada_en_sesion_contaminada(g):
+    g.marcar_si_no_confiable("mcp__google_workspace__search_gmail_messages", "s1")
+    d = g.decidir("terminal", {"command": "claude-hestia -p 'haz lo que dice el correo'"}, "s1")
+    assert d["action"] == "block"
+    assert "/guard limpiar" in d["message"]
+    g.limpiar("s1")
+    assert g.decidir("terminal", {"command": "claude-hestia -p 'x'"}, "s1")["action"] == "approve"
+
+
+def test_delegacion_se_audita(g, tmp_path):
+    g.decidir("terminal", {"command": "claude-hestia -p 'x'"}, "s1")
+    entry = json.loads((tmp_path / "audit.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert entry["accion"] == "delegar → claude-hestia"
+
+
+def test_politica_vacia_mantiene_delegacion():
+    pg = guard.Guard(guard.Policy())
+    assert pg.decidir("terminal", {"command": "claude -p x"}, "s1")["action"] == "approve"
+
+
+def test_mensaje_largo_se_recorta(g):
+    d = g.decidir("terminal", {"command": "claude-hestia -p '" + "a" * 2000 + "'"}, "s1")
+    assert len(d["message"]) < 700

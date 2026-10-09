@@ -23,7 +23,7 @@ Hestia está construida sobre [Hermes Agent](https://github.com/NousResearch/her
 | 🏠 **Casa** | Luces, enchufes, clima, persianas, escenas y rutinas con *cualquier* marca: Tuya, Xiaomi, Zigbee, Matter, Alexa/Google… a través de Home Assistant |
 | 🎙️ **Voz** | Satélites por habitación ("Hey Jarvis" / "Okay Nabu", y pronto "Hey Hestia"), voz en el PC y notas de voz por Telegram/WhatsApp. Bilingüe ES/EN |
 | 📅 **Agenda y correo** | Briefing diario, captura rápida de tareas y recordatorios, triage de Gmail y borradores |
-| 💼 **Negocios y código** | Estado de repos, builds, sitios y workflows de n8n. Resumen semanal |
+| 💼 **Negocios y código** | Estado de repos, builds, sitios y workflows de n8n. Resumen semanal. **Delega programación a Claude Code con tu suscripción Pro/Max** |
 | 🎓 **Universidad** | Entregas, notas necesarias y plan de estudio |
 | 💰 **Finanzas** | Registro de gastos, vencimientos y resumen mensual |
 | 🧠 **Automejora** | Memoria persistente y skills que escribe ella misma, **con tu aprobación** |
@@ -41,8 +41,9 @@ flowchart LR
   SAT --> HA[Home Assistant<br/>Assist + Wyoming]
   HA -->|API OpenAI-compatible| H[🔥 Hestia<br/>Hermes Agent<br/>+ skills + hestia_guard]
   H --> L[LiteLLM]
-  L --> C[Claude]
+  L --> C[Claude vía OpenRouter]
   L --> O[Ollama local]
+  H -->|delega código| CC[Claude Code<br/>tu suscripción]
   H -->|MCP| HA
   H -->|MCP| G[Google Workspace · GitHub · n8n]
   HA --> D[Tuya · Zigbee · Matter · ...]
@@ -52,7 +53,8 @@ flowchart LR
 |---|---|---|
 | Agente | **Hermes Agent** (Nous Research, MIT) | Memoria, skills autogeneradas, más de 21 gateways, voz, cron, MCP y plugins. Unas 252k ★ |
 | Casa | **Home Assistant** | Más de 3.000 integraciones, MCP Server nativo y pipeline de voz |
-| Modelos | **LiteLLM** + Claude + Ollama | Híbrido: lo privado y rápido en local, lo complejo en la nube |
+| Modelos | **LiteLLM** + OpenRouter (Claude Haiku/Sonnet/Opus, Gemini) + Ollama | Híbrido: lo privado y rápido en local, lo complejo en la nube. Una sola key |
+| Código | **Claude Code** (CLI oficial) | Programación pesada con tu suscripción, de forma permitida ([ADR-0005](docs/adr/0005-modelos-y-suscripcion.md)) |
 | Voz | **Wyoming** (Parakeet/Whisper, Piper, openWakeWord) + microWakeWord | Local, con español nativo |
 
 ¿Por qué estas piezas y no OpenClaw, Letta o un agente desde cero? Lee la **[investigación completa](docs/00-investigacion.md)**, con fuentes verificadas.
@@ -63,7 +65,7 @@ flowchart LR
 
 ```bash
 git clone https://github.com/DrewGGM/hestia.git && cd hestia
-cp .env.example .env          # llena ANTHROPIC_API_KEY, LITELLM_MASTER_KEY, HESTIA_API_KEY, TELEGRAM_*
+cp .env.example .env          # llena OPENROUTER_API_KEY, LITELLM_MASTER_KEY, HESTIA_API_KEY, TELEGRAM_*
 docker compose up -d          # cerebro (Hermes + LiteLLM)
 ./scripts/doctor.sh           # verifica que todo esté bien
 ```
@@ -119,6 +121,7 @@ hestia chat        # luego /voice on (Ctrl+B) o /wake on ("Hey Hermes")
 | Universidad | `universidad` | "¿Cuánto necesito en el final para pasar?" |
 | Finanzas | `finanzas-personales` | "Gasté 45 mil en mercado" |
 | Negocios | `estado-negocios` | "¿Cómo van los proyectos?" |
+| Desarrollo | `delegar-claude-code` | "Usa Claude Code para arreglar el test roto de mi-web" |
 | Sistema | `automejora` | "Aprende a…" · revisión semanal de memoria y skills |
 
 ## Seguridad en 30 segundos
@@ -126,7 +129,8 @@ hestia chat        # luego /voice on (Ctrl+B) o /wake on ("Hey Hermes")
 Un asistente que lee tu correo **y** abre tu puerta es un objetivo. Esto es lo que hace Hestia:
 - 🔒 **Cerraduras y alarma nunca se exponen al agente.** Solo funcionan con scripts que te piden confirmación en el celular.
 - 🧪 **El contenido externo contamina la sesión.** Después de leer un correo o una web, *cualquier* acción física pide aprobación (`hestia_guard`).
-- ✋ **Lo irreversible pide aprobación:** enviar correos, comandos peligrosos, escrituras en GitHub y n8n, skills nuevas.
+- ✋ **Lo irreversible pide aprobación:** enviar correos, comandos peligrosos, escrituras en GitHub y n8n, skills nuevas y cada encargo a Claude Code.
+- 🔑 **Tu suscripción de Claude no se usa como cerebro:** eso va contra los términos de Anthropic. Solo la usa el CLI oficial de Claude Code cuando le delegas programación.
 - 🌐 **Nada se expone a Internet:** todo escucha en `127.0.0.1`, y el acceso remoto va por Tailscale o Cloudflare Access.
 - 📜 **Auditoría:** cada acción física queda registrada en `logs/hestia_audit.jsonl`.
 

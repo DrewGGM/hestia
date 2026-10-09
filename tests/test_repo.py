@@ -76,3 +76,21 @@ def test_env_example_sin_secretos():
     text = (ROOT / ".env.example").read_text(encoding="utf-8")
     assert not re.search(r"sk-ant-[A-Za-z0-9]", text)
     assert not re.search(r"\d{8,10}:[A-Za-z0-9_-]{30,}", text)  # token de Telegram
+
+
+def test_versiones_fijadas_coinciden():
+    """HERMES_VERSION y CLAUDE_CODE_VERSION iguales en Dockerfile, compose y .env.example."""
+    env = dict(re.findall(r"^([A-Z_]+)=(.*)$", (ROOT / ".env.example").read_text(encoding="utf-8"), re.M))
+    dockerfile = (ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    for var in ("HERMES_VERSION", "CLAUDE_CODE_VERSION"):
+        assert f"ARG {var}={env[var]}" in dockerfile, var
+        assert f"${{{var}:-{env[var]}}}" in compose, var
+
+
+def test_suscripcion_aislada():
+    """La suscripción de Claude nunca se usa como modelo de Hermes (ADR-0005)."""
+    cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
+    assert cfg["auth"]["adopt_external_logins"] is False
+    env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+    assert not re.search(r"^\s*#?\s*(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_TOKEN)=", env_example, re.M)
